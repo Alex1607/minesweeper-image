@@ -1,4 +1,4 @@
-use std::i64;
+use std::{i64, thread, time};
 use std::str::FromStr;
 
 const BASE: i64 = 62;
@@ -21,16 +21,25 @@ fn main() {
 
 fn parse_v1(raw_meta: &str, raw_mine_data: &str, raw_open_data: &str, raw_flag_data: &str) {
     let metadata = parse_meta_data(raw_meta).unwrap();
-    let game_board = parse_mine_data(raw_mine_data, &metadata).unwrap();
+    let mut game_board = parse_mine_data(raw_mine_data, &metadata).unwrap();
     let open_data = parse_open_data(raw_open_data).unwrap();
     let flag_data = parse_flag_data(raw_flag_data).unwrap();
 
     println!("{metadata:?}\n{game_board:?}\n{open_data:?}\n{flag_data:?}");
+
+    // for x in open_data {
+    //     game_board.open_field(x.x as usize, x.y as usize);
+    //     game_board.print();
+    //     println!("-----------------------");
+    //
+    //     thread::sleep(time::Duration::from_millis((x.time * 50) as u64));
+    // }
 }
 
-fn parse_mine_data(data: &str, metadata: &MetaData) -> Result<Board, ()> {
+fn parse_mine_data(data: &str, metadata: &Metadata) -> Result<Board, ()> {
     let mut board = Board {
         fields: vec![vec![Field::new(); metadata.y_size as usize]; metadata.x_size as usize],
+        metadata: metadata.clone(),
     };
 
     let mines = parse_mine_locations(data).unwrap();
@@ -183,9 +192,9 @@ fn parse_open_data(data: &str) -> Result<Vec<OpenAction>, ()> {
     Ok(return_data)
 }
 
-fn parse_meta_data(data: &str) -> Result<MetaData, ()> {
+fn parse_meta_data(data: &str) -> Result<Metadata, ()> {
     let data_split = data.split_once('x').unwrap();
-    Ok(MetaData {
+    Ok(Metadata {
         x_size: i32::from_str(data_split.0).unwrap(),
         y_size: i32::from_str(data_split.1).unwrap(),
     })
@@ -220,8 +229,55 @@ fn decode(number: &str) -> i64 {
     result
 }
 
-#[derive(Debug)]
-struct MetaData {
+impl Board {
+    fn open_field(&mut self, x: usize, y: usize) {
+        let field = &mut self.fields[x][y];
+
+        //If flagged or already open return
+        if field.field_state != FieldState::Closed {
+            return;
+        }
+
+        if field.mine {
+            return;
+        }
+
+        field.field_state = FieldState::Open;
+
+        if field.value == 0 {
+            for xd in -1..=1_i32 {
+                for yd in -1..=1_i32 {
+                    let xx = xd + x as i32;
+                    let yy = yd + y as i32;
+                    if xx < 0 || xx >= self.metadata.x_size || yy < 0 || yy >= self.metadata.y_size || xd == 0 && yd == 0 {
+                        continue;
+                    }
+                    self.open_field(xx as usize, yy as usize)
+                }
+            }
+        }
+    }
+
+    fn print(&self) {
+        for x in &self.fields {
+            for field in x {
+                print!("{} ", Self::get_field_text(field));
+            }
+            println!()
+        }
+    }
+
+    fn get_field_text(field: &Field) -> String {
+        match field.field_state {
+            FieldState::Open => field.value.to_string(),
+            FieldState::Closed => "_".to_string(),
+            FieldState::Flagged => "¶".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Metadata {
     x_size: i32,
     y_size: i32,
 }
@@ -250,6 +306,7 @@ struct OpenAction {
 #[derive(Debug)]
 struct Board {
     fields: Vec<Vec<Field>>,
+    metadata: Metadata
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -257,8 +314,6 @@ pub struct Field {
     pub value: u8,
     pub field_state: FieldState,
     pub mine: bool,
-    pub x: usize,
-    pub z: usize,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -274,8 +329,6 @@ impl Field {
             value: 0,
             field_state: FieldState::Closed,
             mine: false,
-            x: 0,
-            z: 0,
         }
     }
 }
