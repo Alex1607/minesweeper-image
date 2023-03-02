@@ -197,12 +197,21 @@ impl Renderer {
 
         let mut gif_encoder = GifEncoder::new(File::create("output.gif").unwrap());
         gif_encoder.set_repeat(Infinite).unwrap();
-        let le = frames.len();
+
         println!();
+        let total_frames = frames.len() as f32;
+        let bar_length = 50;
         for (i, frame) in frames.into_iter().enumerate() {
-            print!("\rEncoding frame {} of {}", (i + 1), le);
+            let percent_complete = (i as f32 / total_frames * 100.0) as usize;
+            let num_hashes = percent_complete * bar_length / 100;
+            print!(
+                "\r[{}{}] {percent_complete:}%",
+                "#".repeat(num_hashes),
+                " ".repeat(bar_length - num_hashes)
+            );
             gif_encoder.encode_frame(frame).unwrap();
         }
+        print!("\r[{}] 100%", "#".repeat(50));
     }
 
     fn generate_image(&mut self, percentage: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
