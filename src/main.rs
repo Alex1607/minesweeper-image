@@ -5,9 +5,9 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
+use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 use image::codecs::gif::GifEncoder;
 use image::codecs::gif::Repeat::Infinite;
-use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 
 const BASE: i64 = 62;
 const CHARACTERS: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -15,8 +15,8 @@ const CHARACTERS: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 //TODO: Add percentage bar at the bottom
 //      Show win or loose info at the end?
 fn main() {
-    let data = "1=16x16+A071A1C1D14272B2033383A3D3F3148494C4E5860747B7082A3ADA8CDC3D4D5D7DCDDD8EBE1FDF+000;000;2527;264;3412;358;365;4610;3218;315;5011;402;6044;9023;A013;B329;C33;D631;D813;E710;E61;E54;F610;F029;E847+2420P;3357P;4110P;3027P;6015P;6016R;709P;804P;A234P;A37P;D324P;D45P;D54P;C88P;D78P;F156P".to_string();
-
+    // let data = "1=15x15+B14262B22393E334A44565864767B758593ADAABEB3CEC9DED5E7E+000;001;3325;342;255;3710;383;3A21;4922;482;474;464;361;3513;453;4425;6428;847;944;B39;B414;C46;A49;A53;B53;E619;E89;E94;CA10;DA5;EA5;EB5;EE36;AE15;9D5;8D6;6A29;5A4;698;5916;0B33;1C11;0C2;0D10;5848;5729;671;6631;5512;652;754+3216P;245P;2612P;3924P;4463P;436P;4411R;5425P;748P;A314P;C36P;E545P;E79P;D98P;BA15P;AD33P;BE6P;CE4P;DE3P;7B52P;5926P;5911R;4A9P;2B12P;1B5P;3E42P;6837P;576P;5722R;5618P;763P".to_string();
+    let data = "1=15x15+60B0A1E1024262821384C566A627E71868697A5BDB4CDC5DED2E9E+000;001;3439;332;325;2515;352;454;3019;7218+2021P;2410P;3149P".to_string();
     let option = data.split_once('=').unwrap();
     let version = option.0;
 
@@ -35,7 +35,7 @@ fn parse_v1(raw_meta: &str, raw_mine_data: &str, raw_open_data: &str, raw_flag_d
     let open_data = &mut parse_open_data(raw_open_data).unwrap();
     let flag_data = &mut parse_flag_data(raw_flag_data).unwrap();
 
-    println!("{metadata:?}\n{game_board:?}\n{open_data:?}\n{flag_data:?}");
+    // println!("{metadata:?}\n{game_board:?}\n{open_data:?}\n{flag_data:?}");
 
     if metadata.x_size >= 32 || metadata.y_size >= 32 {
         open_data.iter().for_each(|action| {
@@ -51,7 +51,8 @@ fn parse_v1(raw_meta: &str, raw_mine_data: &str, raw_open_data: &str, raw_flag_d
                     FieldState::Closed
             }
         });
-        let frame = generate_image(&mut game_board, &metadata);
+        let percentage_done = game_board.calculate_done_percentage();
+        let frame = generate_image(&mut game_board, &metadata, percentage_done, "skin_full.png");
         frame.save("output.jpeg").unwrap();
         return;
     }
@@ -81,7 +82,7 @@ fn parse_v1(raw_meta: &str, raw_mine_data: &str, raw_open_data: &str, raw_flag_d
         }
     }
 
-    let frame = generate_image(&mut game_board, &metadata);
+    let frame = generate_image(&mut game_board, &metadata, 0, "skin_20.png");
     frames.push(Frame::from_parts(
         frame,
         0,
@@ -127,7 +128,12 @@ fn parse_v1(raw_meta: &str, raw_mine_data: &str, raw_open_data: &str, raw_flag_d
             flag_data.retain(|flag| flag.total_time.gt(tick.0))
         }
 
-        let frame = generate_image(&mut game_board, &metadata);
+        let frame = generate_image(
+            &mut game_board,
+            &metadata,
+            if id == (tick_map.len() - 1) { 100 } else { ((id as f32 / tick_map.len() as f32) * 100.0) as u32 },
+            "skin_20.png",
+        );
         frames.push(Frame::from_parts(
             frame,
             0,
@@ -145,24 +151,29 @@ fn parse_v1(raw_meta: &str, raw_mine_data: &str, raw_open_data: &str, raw_flag_d
     }
 }
 
-fn generate_image(board: &mut Board, metadata: &Metadata) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+fn generate_image(
+    board: &mut Board,
+    metadata: &Metadata,
+    percentage: u32,
+    image_path: &str,
+) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let progressbar_height = 4;
     let imgx = (metadata.x_size * 32) as u32;
-    let imgy = (metadata.y_size * 32) as u32;
+    let imgy = ((metadata.y_size * 32) as u32) + progressbar_height;
 
-    //TODO: Use full resolution images when image is the output and 4bit in case of gif
-    let im = &mut image::open(Path::new(&"skin_4bit.png")).unwrap();
-    let zero = im.sub_image(0, 0, 32, 32).to_image();
-    let one = im.sub_image(32, 0, 32, 32).to_image();
-    let two = im.sub_image(32 * 2, 0, 32, 32).to_image();
-    let three = im.sub_image(32 * 3, 0, 32, 32).to_image();
-    let four = im.sub_image(32 * 4, 0, 32, 32).to_image();
-    let five = im.sub_image(32 * 5, 0, 32, 32).to_image();
-    let six = im.sub_image(32 * 6, 0, 32, 32).to_image();
-    let seven = im.sub_image(32 * 7, 0, 32, 32).to_image();
-    let eight = im.sub_image(32 * 8, 0, 32, 32).to_image();
-    let tnt = im.sub_image(32 * 9, 0, 32, 32).to_image();
-    let closed = im.sub_image(32 * 10, 0, 32, 32).to_image();
-    let flag = im.sub_image(32 * 11, 0, 32, 32).to_image();
+    let im = &mut image::open(Path::new(image_path)).unwrap();
+    let zero = &im.sub_image(0, 0, 32, 32).to_image();
+    let one = &im.sub_image(32, 0, 32, 32).to_image();
+    let two = &im.sub_image(32 * 2, 0, 32, 32).to_image();
+    let three = &im.sub_image(32 * 3, 0, 32, 32).to_image();
+    let four = &im.sub_image(32 * 4, 0, 32, 32).to_image();
+    let five = &im.sub_image(32 * 5, 0, 32, 32).to_image();
+    let six = &im.sub_image(32 * 6, 0, 32, 32).to_image();
+    let seven = &im.sub_image(32 * 7, 0, 32, 32).to_image();
+    let eight = &im.sub_image(32 * 8, 0, 32, 32).to_image();
+    let tnt = &im.sub_image(32 * 9, 0, 32, 32).to_image();
+    let closed = &im.sub_image(32 * 10, 0, 32, 32).to_image();
+    let flag = &im.sub_image(32 * 11, 0, 32, 32).to_image();
 
     let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
 
@@ -173,59 +184,64 @@ fn generate_image(board: &mut Board, metadata: &Metadata) -> ImageBuffer<Rgba<u8
             let yy = y * 32;
             if field.field_state == FieldState::Closed {
                 imgbuf
-                    .copy_from(&closed, xx, yy)
+                    .copy_from(closed, xx, yy)
                     .expect("TODO: panic message");
                 continue;
             }
             if field.field_state == FieldState::Flagged {
-                imgbuf
-                    .copy_from(&flag, xx, yy)
-                    .expect("TODO: panic message");
+                imgbuf.copy_from(flag, xx, yy).expect("TODO: panic message");
                 continue;
             }
             if field.mine {
-                imgbuf.copy_from(&tnt, xx, yy).expect("TODO: panic message");
+                imgbuf.copy_from(tnt, xx, yy).expect("TODO: panic message");
                 continue;
             }
             match field.value {
-                0 => imgbuf
-                    .copy_from(&zero, xx, yy)
-                    .expect("TODO: panic message"),
-                1 => imgbuf.copy_from(&one, xx, yy).expect("TODO: panic message"),
-                2 => imgbuf.copy_from(&two, xx, yy).expect("TODO: panic message"),
+                0 => imgbuf.copy_from(zero, xx, yy).expect("TODO: panic message"),
+                1 => imgbuf.copy_from(one, xx, yy).expect("TODO: panic message"),
+                2 => imgbuf.copy_from(two, xx, yy).expect("TODO: panic message"),
                 3 => imgbuf
-                    .copy_from(&three, xx, yy)
+                    .copy_from(three, xx, yy)
                     .expect("TODO: panic message"),
-                4 => imgbuf
-                    .copy_from(&four, xx, yy)
-                    .expect("TODO: panic message"),
-                5 => imgbuf
-                    .copy_from(&five, xx, yy)
-                    .expect("TODO: panic message"),
-                6 => imgbuf.copy_from(&six, xx, yy).expect("TODO: panic message"),
+                4 => imgbuf.copy_from(four, xx, yy).expect("TODO: panic message"),
+                5 => imgbuf.copy_from(five, xx, yy).expect("TODO: panic message"),
+                6 => imgbuf.copy_from(six, xx, yy).expect("TODO: panic message"),
                 7 => imgbuf
-                    .copy_from(&seven, xx, yy)
+                    .copy_from(seven, xx, yy)
                     .expect("TODO: panic message"),
                 8 => imgbuf
-                    .copy_from(&eight, xx, yy)
+                    .copy_from(eight, xx, yy)
                     .expect("TODO: panic message"),
                 _ => unreachable!(),
             }
         }
+        let pixel_coloring = (percentage * imgx) / 100;
+
+        for x in 0..imgx {
+            for y in (imgy - progressbar_height)..imgy {
+                let pixel = imgbuf.get_pixel_mut(x, y);
+                if x <= pixel_coloring {
+                    *pixel = Rgba([103, 149, 60, 255]);
+                } else {
+                    *pixel = Rgba([0, 0, 0, 255]);
+                }
+            }
+        }
     }
 
-    // Save the image as “fractal.png”, the format is deduced from the path
-    // imgbuf.save("output.png").unwrap();
     imgbuf
 }
 
 fn parse_mine_data(data: &str, metadata: &Metadata) -> Result<Board, ()> {
+    let mines = parse_mine_locations(data).unwrap();
+
     let mut board = Board {
         fields: vec![vec![Field::new(); metadata.y_size as usize]; metadata.x_size as usize],
         metadata: metadata.clone(),
+        mine_count: mines.len() as u32,
+        open_fields: 0,
+        total_fields: (metadata.y_size * metadata.x_size) as u32,
     };
-
-    let mines = parse_mine_locations(data).unwrap();
 
     for cords in mines {
         let x = cords.0;
@@ -444,12 +460,12 @@ impl Board {
             return;
         }
 
-        //TODO: Fix the last mine not rendering in case the player looses
+        field.field_state = FieldState::Open;
+        self.open_fields += 1;
+
         if field.mine {
             return;
         }
-
-        field.field_state = FieldState::Open;
 
         if field.value == 0 {
             for xd in -1..=1_i32 {
@@ -470,21 +486,8 @@ impl Board {
         }
     }
 
-    fn print(&self) {
-        for x in &self.fields {
-            for field in x {
-                print!("{} ", Self::get_field_text(field));
-            }
-            println!()
-        }
-    }
-
-    fn get_field_text(field: &Field) -> String {
-        match field.field_state {
-            FieldState::Open => field.value.to_string(),
-            FieldState::Closed => "_".to_string(),
-            FieldState::Flagged => "¶".to_string(),
-        }
+    fn calculate_done_percentage(&self) -> u32 {
+        ((self.open_fields as f32 / (self.total_fields - self.mine_count) as f32) * 100_f32) as u32
     }
 }
 
@@ -521,6 +524,9 @@ struct OpenAction {
 struct Board {
     fields: Vec<Vec<Field>>,
     metadata: Metadata,
+    open_fields: u32,
+    mine_count: u32,
+    total_fields: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
