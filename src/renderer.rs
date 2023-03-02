@@ -11,6 +11,9 @@ use crate::minesweeper_logic::{Board, FieldState};
 use crate::parser::{Action, FlagAction, Metadata, OpenAction};
 use crate::ActionType;
 
+const BAR_LENGTH: usize = 50;
+
+
 pub struct Renderer {
     pub(crate) metadata: Metadata,
     game_board: Board,
@@ -105,6 +108,7 @@ impl Renderer {
                 });
             let percentage_done = self.game_board.calculate_done_percentage();
             let frame = self.generate_image(percentage_done);
+            println!("[{}] 100%", "#".repeat(BAR_LENGTH));
             frame.save("output.jpeg").unwrap();
         }
     }
@@ -200,18 +204,17 @@ impl Renderer {
 
         println!();
         let total_frames = frames.len() as f32;
-        let bar_length = 50;
         for (i, frame) in frames.into_iter().enumerate() {
             let percent_complete = (i as f32 / total_frames * 100.0) as usize;
-            let num_hashes = percent_complete * bar_length / 100;
+            let num_hashes = percent_complete * BAR_LENGTH / 100;
             print!(
                 "\r[{}{}] {percent_complete:}%",
                 "#".repeat(num_hashes),
-                " ".repeat(bar_length - num_hashes)
+                " ".repeat(BAR_LENGTH - num_hashes)
             );
             gif_encoder.encode_frame(frame).unwrap();
         }
-        print!("\r[{}] 100%", "#".repeat(50));
+        print!("\r[{}] 100%", "#".repeat(BAR_LENGTH));
     }
 
     fn generate_image(&mut self, percentage: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
