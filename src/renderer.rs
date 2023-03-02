@@ -1,18 +1,19 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::fs::File;
+use std::io::{BufReader, Cursor, Write};
 use std::path::Path;
 use std::time::Duration;
 
 use image::codecs::gif::GifEncoder;
 use image::codecs::gif::Repeat::Infinite;
-use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
+use image::{Delay, DynamicImage, Frame, GenericImage, ImageBuffer, ImageFormat, load, Rgba};
 
 use crate::minesweeper_logic::{Board, FieldState};
 use crate::parser::{Action, FlagAction, Metadata, OpenAction};
 use crate::ActionType;
 
 const BAR_LENGTH: usize = 50;
-
 
 pub struct Renderer {
     pub(crate) metadata: Metadata,
@@ -38,8 +39,8 @@ struct Imagedata {
 }
 
 impl Imagedata {
-    pub fn new(image_path: &str) -> Imagedata {
-        let im = &mut image::open(Path::new(image_path)).unwrap();
+    pub fn new(sprite_data: &[u8]) -> Imagedata {
+        let im = &mut image::load_from_memory(sprite_data).unwrap();
 
         let zero = im.sub_image(0, 0, 32, 32).to_image();
         let one = im.sub_image(32, 0, 32, 32).to_image();
@@ -77,14 +78,14 @@ impl Renderer {
         game_board: Board,
         open_data: Vec<OpenAction>,
         flag_data: Vec<FlagAction>,
-        image: &str,
+        sprite_data: &[u8],
     ) -> Renderer {
         Renderer {
             metadata,
             game_board,
             open_data,
             flag_data,
-            image_data: Imagedata::new(image),
+            image_data: Imagedata::new(sprite_data),
         }
     }
 
