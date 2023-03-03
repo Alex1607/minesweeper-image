@@ -1,18 +1,18 @@
 const BASE: i64 = 62;
 const CHARACTERS: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-pub fn encode(number: i64) -> String {
-    let mut result = String::with_capacity(1);
-    let mut num = number;
-
-    while num > 0 {
-        let digit = num % BASE;
-        num /= BASE;
-        result.insert(0, CHARACTERS.chars().nth(digit as usize).unwrap());
-    }
-
-    result
-}
+// pub fn encode(number: i64) -> String {
+//     let mut result = String::with_capacity(1);
+//     let mut num = number;
+//
+//     while num > 0 {
+//         let digit = num % BASE;
+//         num /= BASE;
+//         result.insert(0, CHARACTERS.chars().nth(digit as usize).unwrap());
+//     }
+//
+//     result
+// }
 
 pub fn decode(number: &str) -> i64 {
     let mut result: i64 = 0;

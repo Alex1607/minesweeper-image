@@ -1,17 +1,14 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Write};
-use std::path::Path;
 use std::time::Duration;
 
+use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 use image::codecs::gif::GifEncoder;
 use image::codecs::gif::Repeat::Infinite;
-use image::{Delay, DynamicImage, Frame, GenericImage, ImageBuffer, ImageFormat, load, Rgba};
 
+use crate::ActionType;
 use crate::minesweeper_logic::{Board, FieldState};
 use crate::parser::{Action, FlagAction, Metadata, OpenAction};
-use crate::ActionType;
 
 const BAR_LENGTH: usize = 50;
 
@@ -90,28 +87,26 @@ impl Renderer {
     }
 
     pub fn render_jpeg(&mut self) {
-        if self.metadata.x_size >= 32 || self.metadata.y_size >= 32 {
-            self.open_data.iter().for_each(|action| {
-                self.game_board
-                    .open_field(action.x as usize, action.y as usize);
+        self.flag_data
+            .iter()
+            .for_each(|action| match action.action {
+                Action::Place => {
+                    self.game_board.fields[action.y as usize][action.x as usize].field_state =
+                        FieldState::Flagged
+                }
+                Action::Remove => {
+                    self.game_board.fields[action.y as usize][action.x as usize].field_state =
+                        FieldState::Closed
+                }
             });
-            self.flag_data
-                .iter()
-                .for_each(|action| match action.action {
-                    Action::Place => {
-                        self.game_board.fields[action.y as usize][action.x as usize].field_state =
-                            FieldState::Flagged
-                    }
-                    Action::Remove => {
-                        self.game_board.fields[action.y as usize][action.x as usize].field_state =
-                            FieldState::Closed
-                    }
-                });
-            let percentage_done = self.game_board.calculate_done_percentage();
-            let frame = self.generate_image(percentage_done);
-            println!("[{}] 100%", "#".repeat(BAR_LENGTH));
-            frame.save("output.jpeg").unwrap();
-        }
+        self.open_data.iter().for_each(|action| {
+            self.game_board
+                .open_field(action.x as usize, action.y as usize);
+        });
+        let percentage_done = self.game_board.calculate_done_percentage();
+        let frame = self.generate_image(percentage_done);
+        println!("[{}] 100%", "#".repeat(BAR_LENGTH));
+        frame.save("output.jpeg").unwrap();
     }
 
     pub fn render_gif(&mut self) {
@@ -156,19 +151,6 @@ impl Renderer {
                 Duration::from_secs(15)
             };
 
-            if tick.1.contains(&ActionType::Open) {
-                self.open_data
-                    .iter()
-                    .filter(|flag| flag.total_time.eq(tick.0))
-                    .for_each(|action| {
-                        self.game_board
-                            .open_field(action.x as usize, action.y as usize);
-                    });
-
-                //Remove all elements which are less than tick.0
-                self.open_data.retain(|open| open.total_time.gt(tick.0))
-            }
-
             if tick.1.contains(&ActionType::Flag) {
                 self.flag_data
                     .iter()
@@ -185,6 +167,19 @@ impl Renderer {
                     });
                 //Remove all elements which are less than tick.0
                 self.flag_data.retain(|flag| flag.total_time.gt(tick.0))
+            }
+
+            if tick.1.contains(&ActionType::Open) {
+                self.open_data
+                    .iter()
+                    .filter(|flag| flag.total_time.eq(tick.0))
+                    .for_each(|action| {
+                        self.game_board
+                            .open_field(action.x as usize, action.y as usize);
+                    });
+
+                //Remove all elements which are less than tick.0
+                self.open_data.retain(|open| open.total_time.gt(tick.0))
             }
 
             let frame = self.generate_image(if id == (tick_map.len() - 1) {
