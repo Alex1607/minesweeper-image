@@ -56,6 +56,7 @@ pub fn parse_mine_data(data: &str, metadata: &Metadata) -> Board {
 
     let mut board = Board {
         fields: vec![vec![Field::new(); metadata.y_size as usize]; metadata.x_size as usize],
+        changed_fields: vec![vec![true; metadata.y_size as usize]; metadata.x_size as usize],
         metadata: metadata.clone(),
         mine_count: mines.len() as u32,
         open_fields: 0,
@@ -306,10 +307,12 @@ impl FlagAction {
     pub fn perform_action(&self, board: &mut Board) {
         match self.action {
             Action::Place => {
-                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Flagged
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Flagged;
+                board.changed_fields[self.y as usize][self.x as usize] = true;
             }
             Action::Remove => {
-                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Closed
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Closed;
+                board.changed_fields[self.y as usize][self.x as usize] = true;
             }
         }
     }

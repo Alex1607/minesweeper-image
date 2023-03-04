@@ -3,8 +3,7 @@ use std::fs::File;
 use std::time::Duration;
 
 use clap::Parser;
-use image::codecs::gif::Repeat::Infinite;
-use image::codecs::gif::{GifEncoder, Repeat};
+use gif::{Encoder, Frame as GifFrame, Repeat};
 use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 
 use crate::error::MinesweeperError;
@@ -211,11 +210,23 @@ impl<'a> Renderer<'a> {
     }
 
     fn encode_frames_to_gif(&mut self, frames: Vec<Frame>) -> Result<(), MinesweeperError> {
-        let mut gif_encoder = GifEncoder::new(File::create("output.gif").unwrap());
+        if frames.is_empty() {
+            return Ok(());
+        }
 
-        gif_encoder
+        let (width, height) = frames.first().unwrap().buffer().dimensions();
+
+        let mut encoder = Encoder::new(
+            File::create("output.gif").unwrap(),
+            width as u16,
+            height as u16,
+            &[],
+        )
+        .unwrap();
+
+        encoder
             .set_repeat(if self.options.repeat {
-                Infinite
+                Repeat::Infinite
             } else {
                 Repeat::Finite(0)
             })
@@ -223,7 +234,7 @@ impl<'a> Renderer<'a> {
 
         println!();
         let total_frames = frames.len() as f32;
-        for (i, frame) in frames.into_iter().enumerate() {
+        for (i, image) in frames.into_iter().enumerate() {
             let percent_complete = (i as f32 / total_frames * 100.0) as usize;
             let num_hashes = percent_complete * BAR_LENGTH / 100;
             print!(
@@ -231,8 +242,15 @@ impl<'a> Renderer<'a> {
                 "#".repeat(num_hashes),
                 " ".repeat(BAR_LENGTH - num_hashes)
             );
-            gif_encoder
-                .encode_frame(frame)
+
+            let frame_delay = image.delay().numer_denom_ms().0 / 10;
+            let rbga_frame = &mut image.into_buffer();
+            let mut frame = GifFrame::from_rgba_speed(width as u16, height as u16, rbga_frame, 1);
+            frame.delay = frame_delay as u16;
+            frame.dispose = gif::DisposalMethod::Keep;
+
+            encoder
+                .write_frame(&frame)
                 .map_err(|_| MinesweeperError::GifEncoding)?;
         }
 
@@ -255,14 +273,15 @@ impl<'a> Renderer<'a> {
         tick_map
     }
 
-    fn insert_action(tick_map: &mut BTreeMap<i64, Vec<ActionType>>, total_time: i64, action: ActionType) {
+    fn insert_action(
+        tick_map: &mut BTreeMap<i64, Vec<ActionType>>,
+        total_time: i64,
+        action: ActionType,
+    ) {
         if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(total_time) {
             e.insert(vec![action]);
         } else {
-            tick_map
-                .get_mut(&total_time)
-                .unwrap()
-                .push(action);
+            tick_map.get_mut(&total_time).unwrap().push(action);
         }
     }
 
@@ -279,6 +298,12 @@ impl<'a> Renderer<'a> {
         for x in 0..self.metadata.x_size as u32 {
             for y in 0..self.metadata.y_size as u32 {
                 let field = &self.game_board.fields[x as usize][y as usize];
+
+                // Only render fields that got changed in the last iteration
+                if !self.game_board.changed_fields[x as usize][y as usize] {
+                    continue;
+                }
+
                 let xx = x * 32;
                 let yy = y * 32;
                 if field.field_state == FieldState::Closed {
@@ -343,6 +368,12 @@ impl<'a> Renderer<'a> {
                 }
             }
         }
+
+        //Reset the changed fields after they got rendered
+        self.game_board
+            .changed_fields
+            .iter_mut()
+            .for_each(|row| row.iter_mut().for_each(|field| *field = false));
 
         Ok(imgbuf)
     }

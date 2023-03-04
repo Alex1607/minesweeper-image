@@ -3,6 +3,7 @@ use crate::parser::Metadata;
 #[derive(Debug)]
 pub struct Board {
     pub fields: Vec<Vec<Field>>,
+    pub changed_fields: Vec<Vec<bool>>,
     pub metadata: Metadata,
     pub open_fields: u32,
     pub mine_count: u32,
@@ -33,6 +34,7 @@ impl Board {
         }
 
         field.field_state = FieldState::Open;
+        self.changed_fields[y][x] = true;
         self.open_fields += 1;
 
         if field.mine {
