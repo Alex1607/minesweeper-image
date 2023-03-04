@@ -9,7 +9,7 @@ use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 
 use crate::error::MinesweeperError;
 use crate::minesweeper_logic::{Board, FieldState};
-use crate::parser::{Action, ActionType, FlagAction, Metadata, OpenAction};
+use crate::parser::{ActionType, FlagAction, Metadata, OpenAction};
 
 const BAR_LENGTH: usize = 50;
 
@@ -132,16 +132,7 @@ impl<'a> Renderer<'a> {
     pub fn render_jpeg(&mut self) -> Result<(), MinesweeperError> {
         self.flag_data
             .iter()
-            .for_each(|action| match action.action {
-                Action::Place => {
-                    self.game_board.fields[action.y as usize][action.x as usize].field_state =
-                        FieldState::Flagged
-                }
-                Action::Remove => {
-                    self.game_board.fields[action.y as usize][action.x as usize].field_state =
-                        FieldState::Closed
-                }
-            });
+            .for_each(|action| action.perform_action(&mut self.game_board));
 
         self.open_data.iter().for_each(|action| {
             self.game_board
@@ -184,16 +175,7 @@ impl<'a> Renderer<'a> {
                 self.flag_data
                     .iter()
                     .filter(|flag| flag.total_time.eq(tick.0))
-                    .for_each(|flag| match flag.action {
-                        Action::Place => {
-                            self.game_board.fields[flag.y as usize][flag.x as usize].field_state =
-                                FieldState::Flagged
-                        }
-                        Action::Remove => {
-                            self.game_board.fields[flag.y as usize][flag.x as usize].field_state =
-                                FieldState::Closed
-                        }
-                    });
+                    .for_each(|flag| flag.perform_action(&mut self.game_board));
                 //Remove all elements which are less than tick.0
                 self.flag_data.retain(|flag| flag.total_time.gt(tick.0))
             }
@@ -263,28 +245,25 @@ impl<'a> Renderer<'a> {
         let mut tick_map = BTreeMap::new();
 
         for x in self.open_data.iter() {
-            if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(x.total_time) {
-                e.insert(vec![ActionType::Open]);
-            } else {
-                tick_map
-                    .get_mut(&x.total_time)
-                    .unwrap()
-                    .push(ActionType::Open);
-            }
+            Self::insert_action(&mut tick_map, x.total_time, ActionType::Open)
         }
 
         for x in self.flag_data.iter() {
-            if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(x.total_time) {
-                e.insert(vec![ActionType::Flag]);
-            } else {
-                tick_map
-                    .get_mut(&x.total_time)
-                    .unwrap()
-                    .push(ActionType::Flag);
-            }
+            Self::insert_action(&mut tick_map, x.total_time, ActionType::Flag)
         }
 
         tick_map
+    }
+
+    fn insert_action(tick_map: &mut BTreeMap<i64, Vec<ActionType>>, total_time: i64, action: ActionType) {
+        if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(total_time) {
+            e.insert(vec![action]);
+        } else {
+            tick_map
+                .get_mut(&total_time)
+                .unwrap()
+                .push(action);
+        }
     }
 
     fn generate_image(

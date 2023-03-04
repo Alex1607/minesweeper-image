@@ -1,5 +1,5 @@
 use crate::base62::decode;
-use crate::minesweeper_logic::{Board, Field};
+use crate::minesweeper_logic::{Board, Field, FieldState};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -299,5 +299,18 @@ pub fn parse_meta_data(data: &str) -> Metadata {
     Metadata {
         x_size: i32::from_str(data_split.0).expect("Unable to parse Metadata"),
         y_size: i32::from_str(data_split.1).expect("Unable to parse Metadata"),
+    }
+}
+
+impl FlagAction {
+    pub fn perform_action(&self, board: &mut Board) {
+        match self.action {
+            Action::Place => {
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Flagged
+            }
+            Action::Remove => {
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Closed
+            }
+        }
     }
 }
