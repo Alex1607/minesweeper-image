@@ -1,6 +1,13 @@
 use crate::base62::decode;
 use crate::minesweeper_logic::{Board, Field};
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+
+#[derive(Serialize, Deserialize)]
+pub struct ApiData {
+    #[serde(rename = "gameData")]
+    pub(crate) game_data: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct Metadata {

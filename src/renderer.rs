@@ -2,22 +2,63 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::time::Duration;
 
-use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
-use image::codecs::gif::GifEncoder;
+use clap::Parser;
 use image::codecs::gif::Repeat::Infinite;
+use image::codecs::gif::{GifEncoder, Repeat};
+use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 
-use crate::ActionType;
 use crate::minesweeper_logic::{Board, FieldState};
 use crate::parser::{Action, FlagAction, Metadata, OpenAction};
+use crate::ActionType;
 
 const BAR_LENGTH: usize = 50;
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     pub(crate) metadata: Metadata,
     game_board: Board,
     open_data: Vec<OpenAction>,
     flag_data: Vec<FlagAction>,
     image_data: Imagedata,
+    options: &'a RenderOptions,
+}
+
+#[derive(Parser)]
+#[command()]
+pub struct RenderOptions {
+    #[arg(
+        short,
+        long,
+        value_enum,
+        help = "Choose either 'image' or 'gif' to force that type to be generated. If not set, it will choose automatically based on the size."
+    )]
+    pub(crate) force_type: Option<RenderType>,
+    #[arg(
+        long,
+        help = "To render the GIF or Image with a custom texture set the path relativ to the executable"
+    )]
+    pub(crate) custom_textures: Option<String>,
+    #[arg(short, long, help = "Enable this if you want to insert data yourself.")]
+    pub custom_input: bool,
+    #[arg(short, long, help = "Should the GIF repeat?")]
+    repeat: bool,
+}
+
+#[derive(Copy, Clone)]
+pub enum RenderType {
+    Image,
+    Gif,
+}
+
+impl std::str::FromStr for RenderType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_ref() {
+            "image" => Ok(RenderType::Image),
+            "gif" => Ok(RenderType::Gif),
+            _ => Err(format!("Unknown render type: {}", s)),
+        }
+    }
 }
 
 struct Imagedata {
@@ -69,20 +110,22 @@ impl Imagedata {
     }
 }
 
-impl Renderer {
+impl<'a> Renderer<'a> {
     pub fn new(
         metadata: Metadata,
         game_board: Board,
         open_data: Vec<OpenAction>,
         flag_data: Vec<FlagAction>,
         sprite_data: &[u8],
-    ) -> Renderer {
+        options: &'a RenderOptions,
+    ) -> Renderer<'a> {
         Renderer {
             metadata,
             game_board,
             open_data,
             flag_data,
             image_data: Imagedata::new(sprite_data),
+            options,
         }
     }
 
@@ -196,7 +239,13 @@ impl Renderer {
         }
 
         let mut gif_encoder = GifEncoder::new(File::create("output.gif").unwrap());
-        gif_encoder.set_repeat(Infinite).unwrap();
+        gif_encoder
+            .set_repeat(if self.options.repeat {
+                Infinite
+            } else {
+                Repeat::Finite(0)
+            })
+            .unwrap();
 
         println!();
         let total_frames = frames.len() as f32;
