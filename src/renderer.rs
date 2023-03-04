@@ -7,9 +7,9 @@ use image::codecs::gif::Repeat::Infinite;
 use image::codecs::gif::{GifEncoder, Repeat};
 use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 
+use crate::error::MinesweeperError;
 use crate::minesweeper_logic::{Board, FieldState};
-use crate::parser::{Action, FlagAction, Metadata, OpenAction};
-use crate::ActionType;
+use crate::parser::{Action, ActionType, FlagAction, Metadata, OpenAction};
 
 const BAR_LENGTH: usize = 50;
 
@@ -78,7 +78,7 @@ struct Imagedata {
 
 impl Imagedata {
     pub fn new(sprite_data: &[u8]) -> Imagedata {
-        let im = &mut image::load_from_memory(sprite_data).unwrap();
+        let im = &mut image::load_from_memory(sprite_data).expect("Custom Textures file not found");
 
         let zero = im.sub_image(0, 0, 32, 32).to_image();
         let one = im.sub_image(32, 0, 32, 32).to_image();
@@ -129,7 +129,7 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    pub fn render_jpeg(&mut self) {
+    pub fn render_jpeg(&mut self) -> Result<(), MinesweeperError> {
         self.flag_data
             .iter()
             .for_each(|action| match action.action {
@@ -142,43 +142,28 @@ impl<'a> Renderer<'a> {
                         FieldState::Closed
                 }
             });
+
         self.open_data.iter().for_each(|action| {
             self.game_board
                 .open_field(action.x as usize, action.y as usize);
         });
+
         let percentage_done = self.game_board.calculate_done_percentage();
-        let frame = self.generate_image(percentage_done);
+        let frame = self.generate_image(percentage_done)?;
+
         println!("[{}] 100%", "#".repeat(BAR_LENGTH));
-        frame.save("output.jpeg").unwrap();
+
+        frame
+            .save("output.jpeg")
+            .map_err(|_| MinesweeperError::ImageSave)
     }
 
-    pub fn render_gif(&mut self) {
+    pub fn render_gif(&mut self) -> Result<(), MinesweeperError> {
         let mut frames = Vec::new();
 
-        let mut tick_map: BTreeMap<i64, Vec<ActionType>> = BTreeMap::new();
-        for x in self.open_data.iter() {
-            if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(x.total_time) {
-                e.insert(vec![ActionType::Open]);
-            } else {
-                tick_map
-                    .get_mut(&x.total_time)
-                    .unwrap()
-                    .push(ActionType::Open);
-            }
-        }
+        let tick_map: BTreeMap<i64, Vec<ActionType>> = self.create_tick_map();
 
-        for x in self.flag_data.iter() {
-            if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(x.total_time) {
-                e.insert(vec![ActionType::Flag]);
-            } else {
-                tick_map
-                    .get_mut(&x.total_time)
-                    .unwrap()
-                    .push(ActionType::Flag);
-            }
-        }
-
-        let frame = self.generate_image(0);
+        let frame = self.generate_image(0)?;
         frames.push(Frame::from_parts(
             frame,
             0,
@@ -188,6 +173,7 @@ impl<'a> Renderer<'a> {
 
         for (id, tick) in tick_map.iter().enumerate() {
             let next_tick = tick_map.keys().nth(id + 1);
+
             let duration = if let Some(next) = next_tick {
                 Duration::from_millis(((next - tick.0) * 50) as u64)
             } else {
@@ -229,7 +215,8 @@ impl<'a> Renderer<'a> {
                 100
             } else {
                 ((id as f32 / tick_map.len() as f32) * 100.0) as u32
-            });
+            })?;
+
             frames.push(Frame::from_parts(
                 frame,
                 0,
@@ -238,14 +225,19 @@ impl<'a> Renderer<'a> {
             ));
         }
 
+        self.encode_frames_to_gif(frames)
+    }
+
+    fn encode_frames_to_gif(&mut self, frames: Vec<Frame>) -> Result<(), MinesweeperError> {
         let mut gif_encoder = GifEncoder::new(File::create("output.gif").unwrap());
+
         gif_encoder
             .set_repeat(if self.options.repeat {
                 Infinite
             } else {
                 Repeat::Finite(0)
             })
-            .unwrap();
+            .map_err(|_| MinesweeperError::GifEncoding)?;
 
         println!();
         let total_frames = frames.len() as f32;
@@ -257,12 +249,48 @@ impl<'a> Renderer<'a> {
                 "#".repeat(num_hashes),
                 " ".repeat(BAR_LENGTH - num_hashes)
             );
-            gif_encoder.encode_frame(frame).unwrap();
+            gif_encoder
+                .encode_frame(frame)
+                .map_err(|_| MinesweeperError::GifEncoding)?;
         }
+
         print!("\r[{}] 100%", "#".repeat(BAR_LENGTH));
+
+        Ok(())
     }
 
-    fn generate_image(&mut self, percentage: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    fn create_tick_map(&mut self) -> BTreeMap<i64, Vec<ActionType>> {
+        let mut tick_map = BTreeMap::new();
+
+        for x in self.open_data.iter() {
+            if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(x.total_time) {
+                e.insert(vec![ActionType::Open]);
+            } else {
+                tick_map
+                    .get_mut(&x.total_time)
+                    .unwrap()
+                    .push(ActionType::Open);
+            }
+        }
+
+        for x in self.flag_data.iter() {
+            if let std::collections::btree_map::Entry::Vacant(e) = tick_map.entry(x.total_time) {
+                e.insert(vec![ActionType::Flag]);
+            } else {
+                tick_map
+                    .get_mut(&x.total_time)
+                    .unwrap()
+                    .push(ActionType::Flag);
+            }
+        }
+
+        tick_map
+    }
+
+    fn generate_image(
+        &mut self,
+        percentage: u32,
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, MinesweeperError> {
         let progressbar_height = 4;
         let imgx = (self.metadata.x_size * 32) as u32;
         let imgy = ((self.metadata.y_size * 32) as u32) + progressbar_height;
@@ -277,49 +305,49 @@ impl<'a> Renderer<'a> {
                 if field.field_state == FieldState::Closed {
                     imgbuf
                         .copy_from(&self.image_data.empty, xx, yy)
-                        .expect("TODO: panic message");
+                        .map_err(|_| MinesweeperError::ImageInsertion)?;
                     continue;
                 }
                 if field.field_state == FieldState::Flagged {
                     imgbuf
                         .copy_from(&self.image_data.flag, xx, yy)
-                        .expect("TODO: panic message");
+                        .map_err(|_| MinesweeperError::ImageInsertion)?;
                     continue;
                 }
                 if field.mine {
                     imgbuf
                         .copy_from(&self.image_data.tnt, xx, yy)
-                        .expect("TODO: panic message");
+                        .map_err(|_| MinesweeperError::ImageInsertion)?;
                     continue;
                 }
                 match field.value {
                     0 => imgbuf
                         .copy_from(&self.image_data.zero, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     1 => imgbuf
                         .copy_from(&self.image_data.one, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     2 => imgbuf
                         .copy_from(&self.image_data.two, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     3 => imgbuf
                         .copy_from(&self.image_data.three, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     4 => imgbuf
                         .copy_from(&self.image_data.four, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     5 => imgbuf
                         .copy_from(&self.image_data.five, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     6 => imgbuf
                         .copy_from(&self.image_data.six, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     7 => imgbuf
                         .copy_from(&self.image_data.seven, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     8 => imgbuf
                         .copy_from(&self.image_data.eight, xx, yy)
-                        .expect("TODO: panic message"),
+                        .map_err(|_| MinesweeperError::ImageInsertion)?,
                     _ => unreachable!(),
                 }
             }
@@ -337,6 +365,6 @@ impl<'a> Renderer<'a> {
             }
         }
 
-        imgbuf
+        Ok(imgbuf)
     }
 }
