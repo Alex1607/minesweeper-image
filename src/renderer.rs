@@ -144,7 +144,7 @@ impl<'a> Renderer<'a> {
         println!("[{}] 100%", "#".repeat(BAR_LENGTH));
 
         frame
-            .save("output.jpeg")
+            .save("output.webp")
             .map_err(|_| MinesweeperError::ImageSave)
     }
 
