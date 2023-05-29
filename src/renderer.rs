@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs::File;
+use std::io::Write;
 use std::time::Duration;
 
 use clap::Parser;
@@ -18,6 +19,7 @@ pub struct Renderer<'a> {
     open_data: Vec<OpenAction>,
     flag_data: Vec<FlagAction>,
     image_data: Imagedata,
+    encoder: Option<Encoder<File>>,
     options: &'a RenderOptions,
 }
 
@@ -124,6 +126,7 @@ impl<'a> Renderer<'a> {
             open_data,
             flag_data,
             image_data: Imagedata::new(sprite_data),
+            encoder: None,
             options,
         }
     }
@@ -149,17 +152,24 @@ impl<'a> Renderer<'a> {
     }
 
     pub fn render_gif(&mut self) -> Result<(), MinesweeperError> {
-        let mut frames = Vec::new();
-
         let tick_map: BTreeMap<i64, Vec<ActionType>> = self.create_tick_map();
+        let mut current_image = 0;
+
+        self.encoder =
+            Some(self.create_encoder(self.metadata.x_size as u32, self.metadata.y_size as u32)?);
 
         let frame = self.generate_image(0)?;
-        frames.push(Frame::from_parts(
-            frame,
-            0,
-            0,
-            Delay::from_saturating_duration(Duration::from_secs(1)),
-        ));
+        self.encode_frame_to_gif(
+            Frame::from_parts(
+                frame,
+                0,
+                0,
+                Delay::from_saturating_duration(Duration::from_secs(1)),
+            ),
+            current_image,
+            tick_map.len(),
+        )?;
+        current_image += 1;
 
         for (id, tick) in tick_map.iter().enumerate() {
             let next_tick = tick_map.keys().nth(id + 1);
@@ -198,24 +208,56 @@ impl<'a> Renderer<'a> {
                 ((id as f32 / tick_map.len() as f32) * 100.0) as u32
             })?;
 
-            frames.push(Frame::from_parts(
-                frame,
-                0,
-                0,
-                Delay::from_saturating_duration(duration),
-            ));
+            self.encode_frame_to_gif(
+                Frame::from_parts(frame, 0, 0, Delay::from_saturating_duration(duration)),
+                current_image,
+                tick_map.len(),
+            )?;
+            current_image += 1;
         }
 
-        self.encode_frames_to_gif(frames)
+        print!("\r[{}] 100%", "#".repeat(BAR_LENGTH));
+
+        Ok(())
     }
 
-    fn encode_frames_to_gif(&mut self, frames: Vec<Frame>) -> Result<(), MinesweeperError> {
-        if frames.is_empty() {
-            return Ok(());
-        }
+    fn encode_frame_to_gif(
+        &mut self,
+        image: Frame,
+        current_image_id: usize,
+        total_frames: usize,
+    ) -> Result<(), MinesweeperError> {
+        let (width, height) = image.buffer().dimensions();
 
-        let (width, height) = frames.first().unwrap().buffer().dimensions();
+        let percent_complete = (current_image_id as f32 / total_frames as f32 * 100.0) as usize;
+        let num_hashes = percent_complete * BAR_LENGTH / 100;
+        print!(
+            "\r[{}{}] {percent_complete:}%",
+            "#".repeat(num_hashes),
+            " ".repeat(BAR_LENGTH - num_hashes)
+        );
+        std::io::stdout().flush().unwrap_or_default();
 
+        let frame_delay = image.delay().numer_denom_ms().0 / 10;
+        let rbga_frame = &mut image.into_buffer();
+        let mut frame = GifFrame::from_rgba_speed(width as u16, height as u16, rbga_frame, 1);
+        frame.delay = frame_delay as u16;
+        frame.dispose = gif::DisposalMethod::Keep;
+
+        self.encoder
+            .as_mut()
+            .unwrap()
+            .write_frame(&frame)
+            .map_err(|_| MinesweeperError::GifEncoding)?;
+
+        Ok(())
+    }
+
+    fn create_encoder(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Result<Encoder<File>, MinesweeperError> {
         let mut encoder = Encoder::new(
             File::create("output.gif").unwrap(),
             width as u16,
@@ -231,32 +273,7 @@ impl<'a> Renderer<'a> {
                 Repeat::Finite(0)
             })
             .map_err(|_| MinesweeperError::GifEncoding)?;
-
-        println!();
-        let total_frames = frames.len() as f32;
-        for (i, image) in frames.into_iter().enumerate() {
-            let percent_complete = (i as f32 / total_frames * 100.0) as usize;
-            let num_hashes = percent_complete * BAR_LENGTH / 100;
-            print!(
-                "\r[{}{}] {percent_complete:}%",
-                "#".repeat(num_hashes),
-                " ".repeat(BAR_LENGTH - num_hashes)
-            );
-
-            let frame_delay = image.delay().numer_denom_ms().0 / 10;
-            let rbga_frame = &mut image.into_buffer();
-            let mut frame = GifFrame::from_rgba_speed(width as u16, height as u16, rbga_frame, 1);
-            frame.delay = frame_delay as u16;
-            frame.dispose = gif::DisposalMethod::Keep;
-
-            encoder
-                .write_frame(&frame)
-                .map_err(|_| MinesweeperError::GifEncoding)?;
-        }
-
-        print!("\r[{}] 100%", "#".repeat(BAR_LENGTH));
-
-        Ok(())
+        Ok(encoder)
     }
 
     fn create_tick_map(&mut self) -> BTreeMap<i64, Vec<ActionType>> {
