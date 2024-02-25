@@ -1,12 +1,13 @@
-use crate::base62::decode;
-use crate::minesweeper_logic::{Board, Field, FieldState};
 use std::str::FromStr;
+
+use crate::base62::decode;
+use crate::minesweeper_logic::{Board, Field};
 use crate::parsers::parser::{Action, FlagAction, Iparser, Metadata, OpenAction};
 
 pub struct ParserV2;
 
 impl Iparser for ParserV2 {
-    fn supported_versions() -> Vec<String> {
+    fn supported_versions(&self) -> Vec<String> {
         vec!["2".to_string()]
     }
 
@@ -134,10 +135,7 @@ impl Iparser for ParserV2 {
                     .split_once(':')
                     .expect("Unable to parse flag data");
 
-                let time = decode(part_two
-                    .1
-                    .parse::<&str>()
-                    .expect("Unable to parse flag data"));
+                let time = decode(part_two.1);
 
                 return_data.push(FlagAction {
                     x: decode(part_one.0) as i32,
@@ -164,10 +162,7 @@ impl Iparser for ParserV2 {
                         .as_str(),
                 ) as i32;
                 let action = get_flag_type(chars.next_back().expect("Unable to parse flag data"));
-                let time = decode(chars
-                    .as_str()
-                    .parse::<&str>()
-                    .expect("Unable to parse flag data"));
+                let time = decode(chars.as_str());
 
                 return_data.push(FlagAction {
                     x,
@@ -201,10 +196,7 @@ impl Iparser for ParserV2 {
                     .split_once(':')
                     .expect("Unable to parse open data");
 
-                let time = part_two
-                    .1
-                    .parse::<i64>()
-                    .expect("Unable to parse open data");
+                let time = decode(part_two.1);
 
                 return_data.push(OpenAction {
                     x: decode(part_one.0) as i32,
@@ -229,10 +221,7 @@ impl Iparser for ParserV2 {
                         .to_string()
                         .as_str(),
                 ) as i32;
-                let time = chars
-                    .as_str()
-                    .parse::<i64>()
-                    .expect("Unable to parse open data");
+                let time = decode(chars.as_str());
 
                 return_data.push(OpenAction {
                     x,

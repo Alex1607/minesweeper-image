@@ -18,14 +18,14 @@ fn main() {
     let args = RenderOptions::parse();
     let data = fetch_data(&args);
     let option = data.split_once('=').expect("Unable to get Version");
-    let possible_parsers: Vec<dyn Iparser> = vec![parsers::v1::parser::ParserV1, parsers::v2::parser::ParserV2];
+    let possible_parsers: Vec<&dyn Iparser> = vec![&parsers::v1::parser::ParserV1, &parsers::v2::parser::ParserV2];
 
-    let found_parser = possible_parsers.iter().filter(|p| p.supported_versions().contains(&option.0))
+    let found_parser = possible_parsers.iter().filter(|p| p.supported_versions().contains(&option.0.to_string()))
         .next()
         .expect("Unknown / Unsupported version");
 
     let split: Vec<&str> = option.1.split('+').collect();
-    
+
     let metadata = found_parser.parse_meta_data(split[0].trim());
 
     let parsed_data = ParsedData {
@@ -34,7 +34,7 @@ fn main() {
         flag_data: found_parser.parse_flag_data(split[3].trim()),
         metadata,
     };
-    
+
     render(parsed_data, args).expect("Unable to render");
 }
 

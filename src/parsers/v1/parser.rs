@@ -1,12 +1,12 @@
 use crate::base62::decode;
-use crate::minesweeper_logic::{Board, Field, FieldState};
+use crate::minesweeper_logic::{Board, Field};
 use std::str::FromStr;
 use crate::parsers::parser::{Action, FlagAction, Iparser, Metadata, OpenAction};
 
 pub struct ParserV1;
 
 impl Iparser for ParserV1 {
-    fn supported_versions() -> Vec<String> {
+    fn supported_versions(&self) -> Vec<String> {
         vec!["1".to_string()]
     }
 
