@@ -1,7 +1,7 @@
 use crate::base62::decode;
 use crate::minesweeper_logic::{Board, Field};
-use std::str::FromStr;
 use crate::parsers::parser::{Action, FlagAction, Iparser, Metadata, OpenAction};
+use std::str::FromStr;
 
 pub struct ParserV1;
 

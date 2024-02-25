@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::minesweeper_logic::{Board, FieldState};
+use serde::{Deserialize, Serialize};
 
 pub trait Iparser {
     fn supported_versions(&self) -> Vec<String>;
@@ -71,7 +71,8 @@ impl FlagAction {
                 board.changed_fields[self.y as usize][self.x as usize] = true;
             }
             Action::Toggle => {
-                board.fields[self.y as usize][self.x as usize].field_state = FieldState::UnsureFlagged;
+                board.fields[self.y as usize][self.x as usize].field_state =
+                    FieldState::UnsureFlagged;
                 board.changed_fields[self.y as usize][self.x as usize] = true;
             }
         }
