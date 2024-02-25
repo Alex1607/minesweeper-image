@@ -25,8 +25,7 @@ fn main() {
 
     let found_parser = possible_parsers
         .iter()
-        .filter(|p| p.supported_versions().contains(&option.0.to_string()))
-        .next()
+        .find(|p| p.supported_versions().contains(&option.0.to_string()))
         .expect("Unknown / Unsupported version");
 
     let split: Vec<&str> = option.1.split('+').collect();
