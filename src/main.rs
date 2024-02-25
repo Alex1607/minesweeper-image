@@ -3,16 +3,14 @@ use std::io;
 use clap::Parser;
 
 use crate::error::MinesweeperError;
-use crate::parser::{
-    parse_flag_data, parse_meta_data, parse_mine_data, parse_open_data, ApiData, ParsedData,
-};
+use crate::parsers::parser::{ApiData, Iparser, ParsedData};
 use crate::renderer::{RenderOptions, RenderType, Renderer};
 use crate::textures::load_textures;
 
 mod base62;
 mod error;
 mod minesweeper_logic;
-mod parser;
+mod parsers;
 mod renderer;
 mod textures;
 
@@ -20,21 +18,24 @@ fn main() {
     let args = RenderOptions::parse();
     let data = fetch_data(&args);
     let option = data.split_once('=').expect("Unable to get Version");
+    let possible_parsers: Vec<dyn Iparser> = vec![parsers::v1::parser::ParserV1, parsers::v2::parser::ParserV2];
 
-    //Version 1 requires all data to exist, empty data has to be marked with an `++` but I might not be omitted
-    //Only metadata and mine data might not be empty
-    if option.0.eq("1") {
-        let split: Vec<&str> = option.1.split('+').collect();
-        let parsed_data = parse_v1(
-            split[0].trim(),
-            split[1].trim(),
-            split[2].trim(),
-            split[3].trim(),
-        );
-        render(parsed_data, args).expect("Error while rendering Image");
-    } else {
-        println!("Unknown / Unsupported version");
-    }
+    let found_parser = possible_parsers.iter().filter(|p| p.supported_versions().contains(&option.0))
+        .next()
+        .expect("Unknown / Unsupported version");
+
+    let split: Vec<&str> = option.1.split('+').collect();
+    
+    let metadata = found_parser.parse_meta_data(split[0].trim());
+
+    let parsed_data = ParsedData {
+        game_board: found_parser.parse_mine_data(split[1].trim(), &metadata),
+        open_data: found_parser.parse_open_data(split[2].trim()),
+        flag_data: found_parser.parse_flag_data(split[3].trim()),
+        metadata,
+    };
+    
+    render(parsed_data, args).expect("Unable to render");
 }
 
 fn fetch_data(args: &RenderOptions) -> String {
@@ -61,22 +62,6 @@ fn fetch_data(args: &RenderOptions) -> String {
 
         let v: ApiData = serde_json::from_str(request_data.as_ref()).expect("Unable to parse Data");
         v.game_data
-    }
-}
-
-fn parse_v1(
-    raw_meta: &str,
-    raw_mine_data: &str,
-    raw_open_data: &str,
-    raw_flag_data: &str,
-) -> ParsedData {
-    let metadata = parse_meta_data(raw_meta);
-
-    ParsedData {
-        game_board: parse_mine_data(raw_mine_data, &metadata),
-        open_data: parse_open_data(raw_open_data),
-        flag_data: parse_flag_data(raw_flag_data),
-        metadata,
     }
 }
 

@@ -1,8 +1,8 @@
-use crate::parser::Metadata;
 use crate::renderer::{RenderOptions, RenderType};
 use std::fs;
 use std::fs::File;
 use std::io::Read;
+use crate::parsers::parser::Metadata;
 
 pub fn load_textures(options: &RenderOptions, metadata: &Metadata) -> Vec<u8> {
     let skin_full: Vec<u8> = include_bytes!("../resources/skin_full.png").to_vec();

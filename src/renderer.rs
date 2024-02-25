@@ -9,7 +9,7 @@ use image::{Delay, Frame, GenericImage, ImageBuffer, Rgba};
 
 use crate::error::MinesweeperError;
 use crate::minesweeper_logic::{Board, FieldState};
-use crate::parser::{ActionType, FlagAction, Metadata, OpenAction};
+use crate::parsers::parser::{ActionType, FlagAction, Metadata, OpenAction};
 
 const BAR_LENGTH: usize = 50;
 
