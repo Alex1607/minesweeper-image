@@ -6,8 +6,8 @@ use std::str::FromStr;
 pub struct ParserV1;
 
 impl Iparser for ParserV1 {
-    fn supported_versions(&self) -> Vec<String> {
-        vec!["1".to_string()]
+    fn supported_versions(&self) -> Vec<&str> {
+        vec!["1"]
     }
 
     fn parse_mine_data(&self, data: &str, metadata: &Metadata) -> Board {

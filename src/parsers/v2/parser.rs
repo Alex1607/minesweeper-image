@@ -7,8 +7,8 @@ use crate::parsers::parser::{Action, FlagAction, Iparser, Metadata, OpenAction};
 pub struct ParserV2;
 
 impl Iparser for ParserV2 {
-    fn supported_versions(&self) -> Vec<String> {
-        vec!["2".to_string()]
+    fn supported_versions(&self) -> Vec<&str> {
+        vec!["2"]
     }
 
     fn parse_mine_data(&self, data: &str, metadata: &Metadata) -> Board {

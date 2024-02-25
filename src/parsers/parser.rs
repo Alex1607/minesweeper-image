@@ -2,7 +2,7 @@ use crate::minesweeper_logic::{Board, FieldState};
 use serde::{Deserialize, Serialize};
 
 pub trait Iparser {
-    fn supported_versions(&self) -> Vec<String>;
+    fn supported_versions(&self) -> Vec<&str>;
     fn parse_mine_data(&self, data: &str, metadata: &Metadata) -> Board;
     fn parse_mine_locations(&self, data: &str) -> Vec<(i32, i32)>;
     fn parse_flag_data(&self, data: &str) -> Vec<FlagAction>;
