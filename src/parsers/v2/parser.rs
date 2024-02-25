@@ -11,7 +11,7 @@ impl Iparser for ParserV2 {
     }
 
     fn parse_mine_data(&self, data: &str, metadata: &Metadata) -> Board {
-        let mines = parse_mine_locations(data);
+        let mines = self.parse_mine_locations(data);
 
         let mut board = Board {
             fields: vec![vec![Field::new(); metadata.y_size as usize]; metadata.x_size as usize],
@@ -261,24 +261,5 @@ fn get_flag_type(raw_flag_type: char) -> Action {
         'R' => Action::Remove,
         'T' => Action::Toggle,
         _ => unreachable!(),
-    }
-}
-
-impl FlagAction {
-    fn perform_action(&self, board: &mut Board) {
-        match self.action {
-            Action::Place => {
-                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Flagged;
-                board.changed_fields[self.y as usize][self.x as usize] = true;
-            }
-            Action::Remove => {
-                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Closed;
-                board.changed_fields[self.y as usize][self.x as usize] = true;
-            }
-            Action::Toggle => {
-                board.fields[self.y as usize][self.x as usize].field_state = FieldState::UnsureFlagged;
-                board.changed_fields[self.y as usize][self.x as usize] = true;
-            }
-        }
     }
 }

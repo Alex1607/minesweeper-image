@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::minesweeper_logic::Board;
+use crate::minesweeper_logic::{Board, FieldState};
 
 pub trait Iparser {
     fn supported_versions() -> Vec<String>;
@@ -26,7 +26,7 @@ pub struct Metadata {
 pub struct FlagAction {
     pub x: i32,
     pub y: i32,
-    pub(crate) time: i64,
+    pub time: i64,
     pub action: Action,
     pub total_time: i64,
 }
@@ -42,7 +42,7 @@ pub enum Action {
 pub struct OpenAction {
     pub x: i32,
     pub y: i32,
-    pub(crate) time: i64,
+    pub time: i64,
     pub total_time: i64,
 }
 
@@ -57,4 +57,23 @@ pub struct ParsedData {
     pub game_board: Board,
     pub open_data: Vec<OpenAction>,
     pub flag_data: Vec<FlagAction>,
+}
+
+impl FlagAction {
+    pub(crate) fn perform_action(&self, board: &mut Board) {
+        match self.action {
+            Action::Place => {
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Flagged;
+                board.changed_fields[self.y as usize][self.x as usize] = true;
+            }
+            Action::Remove => {
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::Closed;
+                board.changed_fields[self.y as usize][self.x as usize] = true;
+            }
+            Action::Toggle => {
+                board.fields[self.y as usize][self.x as usize].field_state = FieldState::UnsureFlagged;
+                board.changed_fields[self.y as usize][self.x as usize] = true;
+            }
+        }
+    }
 }
