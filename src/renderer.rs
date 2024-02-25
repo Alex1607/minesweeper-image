@@ -314,10 +314,10 @@ impl<'a> Renderer<'a> {
 
         for x in 0..self.metadata.x_size as u32 {
             for y in 0..self.metadata.y_size as u32 {
-                let field = &self.game_board.fields[x as usize][y as usize];
+                let field = &self.game_board.fields[y as usize][x as usize];
 
                 // Only render fields that got changed in the last iteration
-                if !self.game_board.changed_fields[x as usize][y as usize] {
+                if !self.game_board.changed_fields[y as usize][x as usize] {
                     continue;
                 }
 
