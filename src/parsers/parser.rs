@@ -20,6 +20,7 @@ pub struct ApiData {
 pub struct Metadata {
     pub x_size: i32,
     pub y_size: i32,
+    pub timeunits: i32,
 }
 
 #[derive(Debug)]

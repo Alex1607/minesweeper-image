@@ -251,6 +251,7 @@ impl Iparser for ParserV1 {
         Metadata {
             x_size: i32::from_str(data_split.0).expect("Unable to parse Metadata"),
             y_size: i32::from_str(data_split.1).expect("Unable to parse Metadata"),
+            timeunits: 50,
         }
     }
 }
