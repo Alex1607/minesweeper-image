@@ -1,4 +1,4 @@
-use crate::parser::Metadata;
+use crate::parsers::parser::Metadata;
 
 #[derive(Debug)]
 pub struct Board {
@@ -22,6 +22,7 @@ pub enum FieldState {
     Open,
     Closed,
     Flagged,
+    UnsureFlagged,
 }
 
 impl Board {
